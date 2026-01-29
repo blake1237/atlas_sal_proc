@@ -3,12 +3,13 @@
 Atlas plotting script for single deployment data file
 Plots all sensors/depths from a single .adj, .dft, or .flg file
 with daily averages subplot below
-Usage: python atlas_plot.py <filename>
+Usage: python atlas_plot.py <filename> [--depth DEPTH1,DEPTH2,...]
 """
 
 import pandas as pd
 import sys
 import os
+import argparse
 from bokeh.plotting import figure, show, output_file
 from bokeh.models import HoverTool, DatetimeTickFormatter, DataRange1d
 from bokeh.layouts import column
@@ -161,6 +162,30 @@ def calculate_daily_averages(df):
     daily_df = df.resample('D').mean()
 
     return daily_df
+
+def filter_dataframe_by_depths(df, requested_depths):
+    """Filter dataframe to only include specified depths"""
+    if requested_depths is None:
+        return df
+
+    # Convert requested depths to column names
+    requested_columns = []
+    for depth in requested_depths:
+        if depth == 1:
+            requested_columns.append('SSS')
+        else:
+            requested_columns.append(f'S{depth:03d}')
+
+    # Filter to only include requested columns that exist in the dataframe
+    available_columns = [col for col in requested_columns if col in df.columns]
+
+    if not available_columns:
+        print(f"Warning: None of the requested depths {requested_depths} found in data")
+        print(f"Available depths: {[col for col in df.columns]}")
+        return df
+
+    print(f"Filtering to depths: {requested_depths}")
+    return df[available_columns]
 
 def create_single_plot_figure(df, param_type, y_label, basename, file_type, shared_x_range=None, invert_y=False):
     """Create single plot with all instruments/depths"""
@@ -382,17 +407,42 @@ def create_daily_average_plot(df_daily, param_type, y_label, basename, file_type
 
     return p
 
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: python atlas_plot.py <filename>")
-        print("Example: python atlas_plot.py mooring_sal.adj")
-        print("         python atlas_plot.py mooring_sal.dft")
-        print("         python atlas_plot.py mooring_sal.flg")
-        print("Supported file types: .adj, .dft, .flg")
-        print("Supported parameter types: salinity, temperature, density, conductivity")
-        sys.exit(1)
+def parse_depths(depth_str):
+    """Parse depth string into list of integers"""
+    if not depth_str:
+        return None
 
-    filename = sys.argv[1]
+    depths = []
+    for depth in depth_str.split(','):
+        try:
+            depths.append(int(depth.strip()))
+        except ValueError:
+            print(f"Warning: Invalid depth value '{depth.strip()}' ignored")
+
+    return depths if depths else None
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Atlas plotting script for single deployment data file",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python atlas_plot.py mooring_sal.adj                    # Plot all depths
+  python atlas_plot.py mooring_sal.adj --depth 40         # Plot only 40m depth
+  python atlas_plot.py mooring_sal.adj --depth 10,40      # Plot 10m and 40m depths
+  python atlas_plot.py mooring_sal.adj --depth 1,10,40    # Plot 1m (SSS), 10m, and 40m depths
+
+Supported file types: .adj, .dft, .flg
+Supported parameter types: salinity, temperature, density, conductivity
+        """
+    )
+
+    parser.add_argument('filename', help='Input file path (.adj, .dft, or .flg)')
+    parser.add_argument('--depth', type=str, help='Comma-separated list of depths to plot (e.g., "40" or "10,40")')
+
+    args = parser.parse_args()
+    filename = args.filename
+    requested_depths = parse_depths(args.depth)
 
     # Check if file exists
     if not os.path.exists(filename):
@@ -419,6 +469,9 @@ def main():
         print("Failed to parse file")
         sys.exit(1)
 
+    # Filter by requested depths if specified
+    df = filter_dataframe_by_depths(df, requested_depths)
+
     # Calculate daily averages
     df_daily = calculate_daily_averages(df)
 
@@ -443,7 +496,10 @@ def main():
     combined_figure = column(main_figure, daily_figure, sizing_mode="stretch_both")
 
     # Save as HTML only
-    html_output_name = f"{param_type}_{file_ext[1:]}_{basename}.html"
+    depth_suffix = ""
+    if requested_depths:
+        depth_suffix = f"_depths_{'_'.join(map(str, requested_depths))}"
+    html_output_name = f"{param_type}_{file_ext[1:]}_{basename}{depth_suffix}.html"
     output_file(html_output_name)
     show(combined_figure)
     print(f"Figure saved to '{html_output_name}'")
