@@ -9,6 +9,10 @@ from bokeh.server.server import Server
 from bokeh.application import Application
 from bokeh.application.handlers.function import FunctionHandler
 import sys
+import warnings
+
+# Suppress the timezone warning from Bokeh serialization
+warnings.filterwarnings("ignore", message="no explicit representation of timezones available for np.datetime64", category=UserWarning, module="bokeh.util.serialization")
 
 def validate_column_name(column_name):
     # This will be populated dynamically after parsing the file
@@ -569,6 +573,11 @@ def modify_doc(doc):
 
     # Create layout
     layout = bokeh_column([file_name_div, top_button_row] + plots + [bottom_button_row])
+
+    # Disable reconnection and connection status notifications (Bokeh 3.8+)
+    doc.config.reconnect_session = False
+    doc.config.notify_connection_status = False
+
     doc.add_root(layout)
 
 # Set up the Bokeh server
