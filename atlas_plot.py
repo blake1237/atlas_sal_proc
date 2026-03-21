@@ -33,7 +33,7 @@ def detect_parameter_type(filename):
         invert_y = False
     elif 'dens' in basename:
         param_type = 'density'
-        y_label = 'Density (ρ₀)'
+        y_label = 'Density (σ_θ)'
         invert_y = True
     else:
         param_type = 'unknown'
@@ -151,7 +151,7 @@ def get_hover_units(param_type):
     elif param_type == 'conductivity':
         return 'mS/cm'
     elif param_type == 'density':
-        return 'ρ₀'
+        return 'σ_θ'
     else:
         return ''
 
@@ -238,9 +238,10 @@ def create_single_plot_figure(df, param_type, y_label, basename, file_type, shar
     for i, col in enumerate(columns):
         if col in df.columns:
             clean_data = df[col].dropna()
-            if len(clean_data) > 0:
-                depth_label = create_depth_label(col)
+            depth_label = create_depth_label(col)
 
+            if len(clean_data) > 0:
+                # Plot with normal color for valid data
                 p.line(
                     clean_data.index,
                     clean_data.values,
@@ -251,7 +252,18 @@ def create_single_plot_figure(df, param_type, y_label, basename, file_type, shar
                 )
                 valid_columns.append(col)
             else:
+                # Plot single NaN point with lighter color for missing data (legend only)
                 print(f"No valid data for column {col}")
+                # Use a single NaN point so legend entry appears
+                dummy_x = [df.index[0]] if len(df.index) > 0 else [pd.Timestamp('2000-01-01')]
+                p.line(
+                    dummy_x,
+                    [float('nan')],
+                    line_width=2,
+                    color=colors[i % len(colors)],
+                    alpha=0.3,
+                    legend_label=depth_label
+                )
 
     if not valid_columns:
         print("No valid data found in any columns")
@@ -348,9 +360,10 @@ def create_daily_average_plot(df_daily, param_type, y_label, basename, file_type
     for i, col in enumerate(columns):
         if col in df_daily.columns:
             clean_data = df_daily[col].dropna()
-            if len(clean_data) > 0:
-                depth_label = create_depth_label(col)
+            depth_label = create_depth_label(col)
 
+            if len(clean_data) > 0:
+                # Plot with normal color for valid data
                 p.line(
                     clean_data.index,
                     clean_data.values,
@@ -359,8 +372,19 @@ def create_daily_average_plot(df_daily, param_type, y_label, basename, file_type
                     alpha=0.9,
                     legend_label=depth_label
                 )
-
                 valid_columns.append(col)
+            else:
+                # Plot single NaN point with lighter color for missing data (legend only)
+                # Use a single NaN point so legend entry appears
+                dummy_x = [df_daily.index[0]] if len(df_daily.index) > 0 else [pd.Timestamp('2000-01-01')]
+                p.line(
+                    dummy_x,
+                    [float('nan')],
+                    line_width=3,
+                    color=colors[i % len(colors)],
+                    alpha=0.3,
+                    legend_label=depth_label
+                )
 
     if not valid_columns:
         print("No valid daily average data found")
